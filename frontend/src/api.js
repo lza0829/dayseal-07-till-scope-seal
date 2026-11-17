@@ -22,8 +22,11 @@ export const api = {
   createLine: (body) => req('/api/lines', { method: 'POST', body: JSON.stringify(body) }),
   closePreview: (day) => req('/api/close/preview' + (day ? `?business_day=${encodeURIComponent(day)}` : '')),
   seal: (body) => req('/api/close/seal', { method: 'POST', body: JSON.stringify(body) }),
+  sealTill: (body) => req('/api/close/seal-till', { method: 'POST', body: JSON.stringify(body) }),
   batches: () => req('/api/close/batches'),
   variances: () => req('/api/close/variances'),
   getDay: () => req('/api/settings/business-day'),
   setDay: (business_day) => req('/api/settings/business-day', { method: 'PUT', body: JSON.stringify({ business_day }) }),
+  getStrategy: () => req('/api/settings/close-strategy'),
+  setStrategy: (close_strategy) => req('/api/settings/close-strategy', { method: 'PUT', body: JSON.stringify({ close_strategy }) }),
 }

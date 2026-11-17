@@ -22,6 +22,40 @@ def day_total(conn: sqlite3.Connection, business_day: str) -> tuple[float, int]:
     return float(row["s"]), int(row["c"])
 
 
+def till_total(
+    conn: sqlite3.Connection, business_day: str, till_code: str
+) -> tuple[float, int]:
+    row = conn.execute(
+        "SELECT COALESCE(SUM(amount),0) s, COUNT(*) c FROM cash_lines WHERE business_day=? AND till_code=?",
+        (business_day, till_code),
+    ).fetchone()
+    return float(row["s"]), int(row["c"])
+
+
+def day_summary_by_till(conn: sqlite3.Connection, business_day: str) -> list[dict[str, Any]]:
+    """整店/分机预览共用的只读分机维度汇总（纯报表，不产生任何机级状态）。"""
+    rows = conn.execute(
+        '''SELECT till_code,
+                  COUNT(*)        AS line_count,
+                  COALESCE(SUM(amount),0) AS system_total
+           FROM cash_lines
+           WHERE business_day=?
+           GROUP BY till_code
+           ORDER BY till_code''',
+        (business_day,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def active_till_codes(conn: sqlite3.Connection, business_day: str) -> set[str]:
+    """当日有流水的机具集合——分机策略下这些机必须已机封，不得靠收口跳过。"""
+    rows = conn.execute(
+        "SELECT DISTINCT till_code FROM cash_lines WHERE business_day=?",
+        (business_day,),
+    ).fetchall()
+    return {r["till_code"] for r in rows}
+
+
 def next_line_no(conn: sqlite3.Connection) -> str:
     n = conn.execute("SELECT COUNT(*) c FROM cash_lines").fetchone()["c"] + 1
     return f"CL-{n:04d}"

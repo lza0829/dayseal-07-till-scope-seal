@@ -6,10 +6,18 @@ from app.db import connect
 from app.repositories import closes as close_repo
 from app.repositories import lines as line_repo
 from app.repositories import settings as settings_repo
+from app.repositories import tills as till_repo
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _require_writable(conn, business_day: str, till_code: str) -> None:
+    """写锁状态机入口：日封锁全日，机封只锁该机当日流水。"""
+    writable, reason = close_repo.line_writable(conn, business_day, till_code)
+    if not writable:
+        raise HTTPException(409, reason)
 
 
 def list_lines(business_day: str | None = None) -> list[dict[str, Any]]:
@@ -26,13 +34,16 @@ def create_line(body: dict[str, Any]) -> dict[str, Any]:
         day = body.get("business_day") or settings_repo.get(conn, "business_day")
         if not day:
             raise HTTPException(400, "未设置营业日")
-        if close_repo.is_sealed(conn, day):
-            raise HTTPException(409, f"营业日 {day} 已封账，禁止新增流水")
+        till_code = body.get("till_code")
+        if not till_code or not till_repo.get_till(conn, till_code):
+            raise HTTPException(400, "till_code 无效或未指定")
+        # 事务内重检：日锁 / 机锁任一命中即拒绝
+        _require_writable(conn, day, till_code)
         created = _now()
         lid = line_repo.insert_line(
             conn,
             line_no=line_repo.next_line_no(conn),
-            till_code=body["till_code"],
+            till_code=till_code,
             business_day=day,
             occurred_at=body.get("occurred_at") or created,
             amount=float(body["amount"]),
@@ -55,8 +66,7 @@ def patch_line(line_id: int, body: dict[str, Any]) -> dict[str, Any]:
         row = line_repo.get_line(conn, line_id)
         if not row:
             raise HTTPException(404, "流水不存在")
-        if close_repo.is_sealed(conn, row["business_day"]):
-            raise HTTPException(409, f"营业日 {row['business_day']} 已封账，禁止修改流水")
+        _require_writable(conn, row["business_day"], row["till_code"])
         line_repo.update_line(
             conn,
             line_id,
@@ -79,8 +89,7 @@ def remove_line(line_id: int) -> dict[str, Any]:
         row = line_repo.get_line(conn, line_id)
         if not row:
             raise HTTPException(404, "流水不存在")
-        if close_repo.is_sealed(conn, row["business_day"]):
-            raise HTTPException(409, f"营业日 {row['business_day']} 已封账，禁止删除流水")
+        _require_writable(conn, row["business_day"], row["till_code"])
         line_repo.delete_line(conn, line_id)
         conn.commit()
         return {"deleted": True, "id": line_id}

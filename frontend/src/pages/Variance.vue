@@ -10,10 +10,17 @@ onMounted(async () => { rows.value = await api.variances() })
   <h2>长短款</h2>
   <div class="panel">
     <table>
-      <thead><tr><th>营业日</th><th>差额</th><th>处置</th><th>时间</th></tr></thead>
+      <thead>
+        <tr><th>营业日</th><th>层级</th><th>差额</th><th>处置</th><th>时间</th></tr>
+      </thead>
       <tbody>
         <tr v-for="r in rows" :key="r.id">
           <td>{{ r.business_day }}</td>
+          <td>
+            <span class="tag" :class="r.scope === 'day' ? 'ok' : 'warn'">
+              {{ r.scope === 'day' ? '日级（整店）' : `机级·${r.till_code}` }}
+            </span>
+          </td>
           <td>{{ r.variance.toFixed(2) }}</td>
           <td><span class="tag" :class="r.disposition === 'balanced' ? 'ok' : 'warn'">{{ r.disposition }}</span></td>
           <td>{{ r.created_at }}</td>

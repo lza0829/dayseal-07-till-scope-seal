@@ -7,6 +7,10 @@ def get(conn: sqlite3.Connection, key: str) -> str | None:
     return row["value"] if row else None
 
 
+def get_all(conn: sqlite3.Connection) -> dict[str, str]:
+    return {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM settings").fetchall()}
+
+
 def set_value(conn: sqlite3.Connection, key: str, value: str) -> None:
     conn.execute(
         "INSERT INTO settings(key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
